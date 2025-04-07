@@ -1,26 +1,43 @@
-package org.hao;
-import java.net.*;
+package org.hao.Client.Request;
+
 import java.io.*;
-import java.util.*;
+import java.net.Socket;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+import java.util.Scanner;
 
-public class TCPClient {
+public class RequestHandler {
+    public static void handleRequest(Socket s1) throws IOException {
+        Scanner scanner = new Scanner(System.in);
+        RequestType requestType = RequestType.valueOf(scanner.nextLine());
 
-    public static void main(String[] args) throws IOException {
-        Socket s1 = new Socket("localhost", 1230);
+        BufferedWriter out = new BufferedWriter(new OutputStreamWriter(s1.getOutputStream()));
+        out.write(requestType.toString() + "\n");
+        out.flush();
 
-//        query(s1);
-
-//        add(s1);
-
-//        remove(s1);
-
-        addMeanings(s1);
-
-//        update(s1);
-
-        output(s1);
-
-        s1.close();
+        switch (requestType) {
+            case query:
+                query(s1);
+                output(s1);
+                break;
+            case add:
+                add(s1);
+                output(s1);
+                break;
+            case remove:
+                remove(s1);
+                output(s1);
+                break;
+            case addmeanings:
+                addMeanings(s1);
+                output(s1);
+                break;
+            case update:
+                update(s1);
+                output(s1);
+                break;
+        }
     }
 
     public static void query(Socket s1) throws IOException {
@@ -125,6 +142,4 @@ public class TCPClient {
         System.out.println("Converted to List: " + words);
         in.close();
     }
-
 }
-

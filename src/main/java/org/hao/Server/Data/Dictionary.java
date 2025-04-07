@@ -1,4 +1,5 @@
-package org.hao;
+package org.hao.Server.Data;
+
 import java.util.*;
 
 public class Dictionary {
