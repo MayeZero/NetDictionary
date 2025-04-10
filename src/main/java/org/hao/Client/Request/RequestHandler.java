@@ -1,5 +1,7 @@
 package org.hao.Client.Request;
 
+import org.hao.Client.View.Client;
+
 import java.io.*;
 import java.net.Socket;
 import java.util.ArrayList;
@@ -7,7 +9,84 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Scanner;
 
-public class RequestHandler {
+public class RequestHandler implements Runnable {
+//    private Socket socket = null;
+//    private RequestType requestType = null;
+//
+//    public RequestHandler(RequestType requestType) {
+//        this.requestType = requestType;
+//    }
+//
+//    @Override
+//    public void run() {
+//        try{
+//            BufferedWriter out = new BufferedWriter(new OutputStreamWriter(socket.getOutputStream()));
+//            out.write(requestType.toString() + "\n");
+//            out.flush();
+//
+//            String result = null;
+//            switch (requestType) {
+//                case query:
+//                    query(socket);
+//                    output(socket);
+//                    break;
+//                case add:
+//                    add(socket);
+//                    break;
+//                case remove:
+//                    remove(socket);
+//                    break;
+//                case addmeanings:
+//                    addMeanings(socket);
+//                    break;
+//                case update:
+//                    update(socket);
+//                    break;
+//            }
+//        } catch (IOException e) {
+//            throw new RuntimeException(e);
+//        }
+//    }
+    private Socket socket;
+    private final RequestType requestType;
+    private final String payload; // e.g., the word to search
+
+    public RequestHandler(RequestType requestType, String payload) {
+        this.socket = Client.getSocket();
+        this.requestType = requestType;
+        this.payload = payload;
+    }
+
+    @Override
+    public void run() {
+        try {
+            System.out.println("Connecting to socket...");
+            BufferedWriter out = new BufferedWriter(new OutputStreamWriter(socket.getOutputStream()));
+            BufferedReader in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
+
+            System.out.println("Sending request type: " + requestType);
+            out.write(requestType.toString());
+            out.newLine();
+            out.flush();
+
+            // 根据 requestType 发送具体的 payload
+            out.write(payload);
+            out.newLine();
+            out.flush();
+            System.out.println("Sent payload: " + payload);  // 打印出发送的 payload
+
+            String response = in.readLine();
+            System.out.println("Received from server: " + response);
+            Client.setResponse(this, response);
+
+        } catch (IOException e) {
+            e.printStackTrace();
+            Client.setResponse(this, "Error: " + e.getMessage());
+        }
+    }
+
+
+
     public static void handleRequest(Socket s1) throws IOException {
         Scanner scanner = new Scanner(System.in);
         RequestType requestType = RequestType.valueOf(scanner.nextLine());
@@ -41,12 +120,8 @@ public class RequestHandler {
     }
 
     public static void query(Socket s1) throws IOException {
-        Scanner scanner = new Scanner(System.in);
-        String wordToSearch = scanner.nextLine();
-        scanner.close();
-
         BufferedWriter out = new BufferedWriter(new OutputStreamWriter(s1.getOutputStream()));
-        out.write(wordToSearch);
+//        out.write(wordToSearch);
         out.newLine();
         out.flush();
     }

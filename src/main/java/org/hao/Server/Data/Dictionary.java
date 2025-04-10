@@ -1,71 +1,79 @@
 package org.hao.Server.Data;
 
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 
 public class Dictionary {
-    private Map<String, List<String>> dictionaryTable = new HashMap<>();
+    private static ConcurrentHashMap<String, List<String>> map = null;
+    private static final Dictionary dictionary = new Dictionary();
+    private final static Object key = new Object();
 
-    public Dictionary() {
-        dictionaryTable.put("word1", new ArrayList<>());
-        dictionaryTable.get("word1").add("meaning11");
-        dictionaryTable.get("word1").add("meaning12");
+    public static void initialize(ConcurrentHashMap<String, List<String>> map) {
+        if(Dictionary.map == null) {
+            Dictionary.map = map;
+        }
+    }
 
-        dictionaryTable.put("word2", new ArrayList<>());
-        dictionaryTable.get("word2").add("meaning21");
-        dictionaryTable.get("word2").add("meaning22");
-        dictionaryTable.get("word2").add("meaning23");
+    public static Dictionary getDictionary() {
+        if(map == null) {
+            return null;
+        }
+        return dictionary;
+    }
+
+    public static ConcurrentHashMap<String, List<String>> getMap() {
+        return map;
     }
 
     public List<String> getMeaningsForWord(String word){
-        if (dictionaryTable.containsKey(word)) {
-            return dictionaryTable.get(word);
+        if (map.containsKey(word)) {
+            return map.get(word);
         }
         return Collections.singletonList("The Word Was Not Found");
     }
 
     public void addWordAndMeanings(String word, List<String> meanings) {
-        if (dictionaryTable.containsKey(word)) {
+        if (map.containsKey(word)) {
             return;
         }else{
-            dictionaryTable.put(word, meanings);
+            synchronized (key){
+                map.put(word, meanings);
+            }
         }
     }
 
     public void removeWordAndMeanings(String word) {
-        if (dictionaryTable.containsKey(word)){
-            dictionaryTable.remove(word);
-        }else{
-            return;
+        synchronized (key){
+            if (map.containsKey(word)){
+                map.remove(word);
+            }
         }
+        return;
     }
 
     public void addAdditionalMeanings(String word, List<String> meanings) {
-        if (dictionaryTable.containsKey(word)) {
-            for (String meaning : meanings) {
-                if(!dictionaryTable.get(word).contains(meaning)){
-                    dictionaryTable.get(word).add(meaning);
+        synchronized (key){
+            if (map.containsKey(word)) {
+                for (String meaning : meanings) {
+                    if(!map.get(word).contains(meaning)){
+                        map.get(word).add(meaning);
+                    }
                 }
             }
-        }else{
-            return;
         }
     }
 
     public void updateMeaning(String word, String existMeaning, String newMeaning) {
-        if (dictionaryTable.containsKey(word)) {
-            if (dictionaryTable.get(word).contains(existMeaning)) {
-                dictionaryTable.get(word).remove(existMeaning);
-                dictionaryTable.get(word).add(newMeaning);
-            }else{
-                return;
+        synchronized (key){
+            if (map.containsKey(word)) {
+                if (map.get(word).contains(existMeaning)) {
+                    map.get(word).remove(existMeaning);
+                    map.get(word).add(newMeaning);
+                }else{
+                    return;
+                }
             }
-        }else{
-            return;
         }
-    }
-
-    public Map<String, List<String>> getDictionaryTable() {
-        return dictionaryTable;
     }
 }
 
