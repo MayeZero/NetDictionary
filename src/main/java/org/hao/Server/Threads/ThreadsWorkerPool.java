@@ -1,9 +1,8 @@
-package org.hao.Server.Common;
+package org.hao.Server.Threads;
 
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
-
 
 // Threads Worker Pool, use Worker Factory to Create Worker, use Worker to execute Request.
 public class ThreadsWorkerPool {

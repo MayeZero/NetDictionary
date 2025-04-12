@@ -12,7 +12,7 @@ import java.util.concurrent.ConcurrentHashMap;
 public class Dictionary {
     private static ConcurrentHashMap<String, List<String>> map = null;
     private static final Dictionary dictionary = new Dictionary();
-    private final static Object key = new Object();
+    private final static Object lock = new Object();
 
     public static void initialize(ConcurrentHashMap<String, List<String>> map) {
         if(Dictionary.map == null) {
@@ -44,7 +44,7 @@ public class Dictionary {
         if (map.containsKey(word)) {
             return new Response(false, "Word already exists.");
         } else {
-            synchronized (key) {
+            synchronized (lock) {
                 map.put(word, meanings);
             }
             return new Response(true, "Word added successfully.");
@@ -52,7 +52,7 @@ public class Dictionary {
     }
 
     public Response removeWordAndMeanings(String word) {
-        synchronized (key) {
+        synchronized (lock) {
             if (map.containsKey(word)) {
                 map.remove(word);
                 return new Response(true, "Removed word: " + word);
@@ -63,7 +63,7 @@ public class Dictionary {
     }
 
     public Response addAdditionalMeanings(String word, List<String> meanings) {
-        synchronized (key) {
+        synchronized (lock) {
             if (map.containsKey(word)) {
                 List<String> existingMeanings = map.get(word);
                 List<String> newlyAddedMeanings = new ArrayList<>();
@@ -87,7 +87,7 @@ public class Dictionary {
     }
 
     public Response updateMeaning(String word, String existMeaning, String newMeaning) {
-        synchronized (key) {
+        synchronized (lock) {
             if (map.containsKey(word)) {
                 if (map.get(word).contains(existMeaning)) {
                     map.get(word).remove(existMeaning);

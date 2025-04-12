@@ -42,10 +42,9 @@ public class ServerGUI extends Application {
         }
 
         dictionaryFile = args.get(1);
-
         DictionaryFile.initialize(dictionaryFile);
-        DictionaryFile save = DictionaryFile.getInstance();
-        ConcurrentHashMap<String, List<String>> dictionary = save.ReadFile();
+        DictionaryFile dictionaryfile = DictionaryFile.getInstance();
+        ConcurrentHashMap<String, List<String>> dictionary = dictionaryfile.ReadFile();
         Dictionary.initialize(dictionary);
 
         FXMLLoader loader = new FXMLLoader(getClass().getResource("/MultiController.fxml"));

@@ -8,25 +8,33 @@ import java.io.IOException;
 import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
 
+// DictionaryFile for SaveFile and ReadFile
 public class DictionaryFile {
-    private static String path = null;
-    private static File file = null;
-    private static DictionaryFile localSave = null;
-    private final static Object key = new Object();
-    private final static String tempPath = "temp.json";
-    private static File temp = null;
+    private static String path;
+    private static File file;
+    private static final String TEMP_PATH = "temp.json";
+    private static File tempFile;
+    private static DictionaryFile instance;
+    private static final Object lock = new Object();
 
-    public static void initialize(String path){
-        if(DictionaryFile.path == null){
-            DictionaryFile.path = path;
-            DictionaryFile.file = new File(DictionaryFile.path);
-            DictionaryFile.temp = new File(DictionaryFile.tempPath);
-            localSave = new DictionaryFile();
+    public static void initialize(String dictionaryPath){
+        if (instance == null) {
+            synchronized (DictionaryFile.class) {
+                if (instance == null) {
+                    path = dictionaryPath;
+                    file = new File(path);
+                    tempFile = new File(TEMP_PATH);
+                    instance = new DictionaryFile();
+                }
+            }
         }
     }
 
     public static DictionaryFile getInstance(){
-        return DictionaryFile.localSave;
+        if (instance == null) {
+            throw new IllegalStateException("DictionaryFile has not been initialized. Call initialize(path) first.");
+        }
+        return instance;
     }
 
     public static void SaveFile(ConcurrentHashMap<String, List<String>> dictionary){
@@ -35,14 +43,13 @@ public class DictionaryFile {
         }
         ObjectMapper mapper = new ObjectMapper();
         try {
-            synchronized (key) {
+            synchronized (lock) {
                 mapper.writeValue(file, dictionary);
-                mapper.writeValue(temp, dictionary);
+                mapper.writeValue(tempFile, dictionary);
             }
         }
         catch (IOException e) {
-            System.out.println("Fail to save to path: " + path);
-            System.out.println("Please enter valid path!");
+            System.err.println("Failed to save dictionary to: " + file.getAbsolutePath());
             System.exit(-1);
         }
     }
@@ -51,22 +58,20 @@ public class DictionaryFile {
         ObjectMapper mapper = new ObjectMapper();
         ConcurrentHashMap<String, List<String>> dictionary = null;
         try {
-            synchronized (key) {
-                System.out.println("Reading from file: " + file.getAbsolutePath());
+            synchronized (lock) {
+                System.out.println("Reading dictionary from: " + file.getAbsolutePath());
                 dictionary = mapper.readValue(file, new TypeReference<ConcurrentHashMap<String,List<String>>>(){});
             }
-        }
-        catch (FileNotFoundException e){
-            System.out.println("Local save do not exist!");
-        }
-        catch (IOException e) {
-            System.out.println("Fail to read from file! Will start with an empty dictionary");
+        } catch (FileNotFoundException e){
+            System.out.println("Local dictionary do not exist!");
+        } catch (IOException e) {
+            System.out.println("Failed to read from main dictionary file. Attempting temp backup...");
         }
 
         if(dictionary == null){
             try {
-                synchronized (key) {
-                    dictionary = mapper.readValue(temp, new TypeReference<ConcurrentHashMap<String,List<String>>>(){});
+                synchronized (lock) {
+                    dictionary = mapper.readValue(tempFile, new TypeReference<ConcurrentHashMap<String,List<String>>>(){});
                 }
             } catch (Exception e){
                 dictionary = new ConcurrentHashMap<String,List<String>>();
