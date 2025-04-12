@@ -1,8 +1,14 @@
 package org.hao.Server.Data;
 
+import org.hao.Server.Request.Response;
+
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
+/**
+ * Dictionary for Query, Add, Remove, Add addtional meanings, Update
+ * @author Ninghao Zhu 1446180
+ */
 public class Dictionary {
     private static ConcurrentHashMap<String, List<String>> map = null;
     private static final Dictionary dictionary = new Dictionary();
@@ -14,6 +20,7 @@ public class Dictionary {
         }
     }
 
+    // GetDictionary
     public static Dictionary getDictionary() {
         if(map == null) {
             return null;
@@ -21,6 +28,7 @@ public class Dictionary {
         return dictionary;
     }
 
+    // Data Structure to manage Concurrency.
     public static ConcurrentHashMap<String, List<String>> getMap() {
         return map;
     }
@@ -32,48 +40,67 @@ public class Dictionary {
         return Collections.singletonList("The Word Was Not Found");
     }
 
-    public void addWordAndMeanings(String word, List<String> meanings) {
+    public Response addWordAndMeanings(String word, List<String> meanings) {
         if (map.containsKey(word)) {
-            return;
-        }else{
-            synchronized (key){
+            return new Response(false, "Word already exists.");
+        } else {
+            synchronized (key) {
                 map.put(word, meanings);
             }
+            return new Response(true, "Word added successfully.");
         }
     }
 
-    public void removeWordAndMeanings(String word) {
-        synchronized (key){
-            if (map.containsKey(word)){
+    public Response removeWordAndMeanings(String word) {
+        synchronized (key) {
+            if (map.containsKey(word)) {
                 map.remove(word);
+                return new Response(true, "Removed word: " + word);
+            } else {
+                return new Response(false, "Word not found: " + word);
             }
         }
-        return;
     }
 
-    public void addAdditionalMeanings(String word, List<String> meanings) {
-        synchronized (key){
+    public Response addAdditionalMeanings(String word, List<String> meanings) {
+        synchronized (key) {
             if (map.containsKey(word)) {
+                List<String> existingMeanings = map.get(word);
+                List<String> newlyAddedMeanings = new ArrayList<>();
+
                 for (String meaning : meanings) {
-                    if(!map.get(word).contains(meaning)){
-                        map.get(word).add(meaning);
+                    if (!existingMeanings.contains(meaning)) {
+                        existingMeanings.add(meaning);
+                        newlyAddedMeanings.add(meaning);
                     }
                 }
+
+                if (!newlyAddedMeanings.isEmpty()) {
+                    return new Response(true, String.format("Added meanings to '%s': %s", word, String.join(",", newlyAddedMeanings)));
+                } else {
+                    return new Response(true, "No new meanings were added for word: " + word + " (all meanings already exist).");
+                }
+            } else {
+                return new Response(false, "Word not found: " + word);
             }
         }
     }
 
-    public void updateMeaning(String word, String existMeaning, String newMeaning) {
-        synchronized (key){
+    public Response updateMeaning(String word, String existMeaning, String newMeaning) {
+        synchronized (key) {
             if (map.containsKey(word)) {
                 if (map.get(word).contains(existMeaning)) {
                     map.get(word).remove(existMeaning);
                     map.get(word).add(newMeaning);
-                }else{
-                    return;
+                    return new Response(true, String.format("Updated meaning for '%s': '%s' -> '%s'", word, existMeaning, newMeaning));
+                } else {
+                    return new Response(false, "Existing meaning not found for word: " + word);
                 }
+            } else {
+                return new Response(false, "Word not found: " + word);
             }
         }
     }
+
 }
 

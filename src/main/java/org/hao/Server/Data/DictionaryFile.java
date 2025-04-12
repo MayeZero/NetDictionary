@@ -11,14 +11,16 @@ import java.util.concurrent.ConcurrentHashMap;
 public class DictionaryFile {
     private static String path = null;
     private static File file = null;
-
     private static DictionaryFile localSave = null;
     private final static Object key = new Object();
+    private final static String tempPath = "temp.json";
+    private static File temp = null;
 
     public static void initialize(String path){
         if(DictionaryFile.path == null){
             DictionaryFile.path = path;
             DictionaryFile.file = new File(DictionaryFile.path);
+            DictionaryFile.temp = new File(DictionaryFile.tempPath);
             localSave = new DictionaryFile();
         }
     }
@@ -35,6 +37,7 @@ public class DictionaryFile {
         try {
             synchronized (key) {
                 mapper.writeValue(file, dictionary);
+                mapper.writeValue(temp, dictionary);
             }
         }
         catch (IOException e) {
@@ -58,6 +61,16 @@ public class DictionaryFile {
         }
         catch (IOException e) {
             System.out.println("Fail to read from file! Will start with an empty dictionary");
+        }
+
+        if(dictionary == null){
+            try {
+                synchronized (key) {
+                    dictionary = mapper.readValue(temp, new TypeReference<ConcurrentHashMap<String,List<String>>>(){});
+                }
+            } catch (Exception e){
+                dictionary = new ConcurrentHashMap<String,List<String>>();
+            }
         }
         SaveFile(dictionary);
         return dictionary;

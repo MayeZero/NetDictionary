@@ -4,6 +4,8 @@ import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 
+
+// Threads Worker Pool, use Worker Factory to Create Worker, use Worker to execute Request.
 public class ThreadsWorkerPool {
     BlockingQueue<Runnable> queue = new LinkedBlockingQueue<Runnable>();
     Integer nums = 64;
@@ -73,11 +75,10 @@ public class ThreadsWorkerPool {
                     Runnable task = queue.poll(100, TimeUnit.SECONDS);
                     if (task != null) {
                         task.run();
-//                        System.out.println("Worker " + id + task.getClass().getSimpleName() + " run!");
+                        System.out.println("Worker " + id + task.getClass().getSimpleName() + " run!");
                     }
                 }
             } catch (InterruptedException e) {
-
                 throw new RuntimeException(e);
             }
         }

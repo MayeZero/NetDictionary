@@ -1,200 +1,181 @@
 package org.hao.Server.Request;
 
-import org.hao.Server.Common.ThreadsWorkerPool;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.hao.Server.Data.Dictionary;
 import org.hao.Server.Data.DictionaryFile;
+import org.hao.Server.MultiController;
 
-import java.io.BufferedReader;
-import java.io.IOException;
-import java.io.InputStreamReader;
-import java.io.PrintWriter;
+import java.io.*;
 import java.net.Socket;
-import java.util.ArrayList;
 import java.util.List;
 
+/**
+ * RequestHandler for request from Client to Server
+ * @author Ninghao Zhu 1446180
+ */
 public class RequestHandler implements Runnable {
     private Socket socket = null;
+    private final MultiController controller;
+    private final int clientId;
 
-    public RequestHandler(Socket s) {
-        this.socket = s;
+    public RequestHandler(Socket socket, MultiController controller, int clientId) {
+        this.socket = socket;
+        this.controller = controller;
+        this.clientId = clientId;
     }
 
     @Override
     public void run() {
-        try{
-            BufferedReader br = new BufferedReader(new InputStreamReader(socket.getInputStream()));
-            RequestType requestType = RequestType.valueOf(br.readLine());
-            System.out.println("Received Request: " + requestType);
-            switch (requestType){
-                case query:
-                    query(socket);
-                    break;
-                case add:
-                    add(socket);
-                    break;
-                case remove:
-                    remove(socket);
-                    break;
-                case addmeanings:
-                    addmeanings(socket);
-                    break;
-                case update:
-                    update(socket);
-                    break;
-            }
-        } catch (IOException e) {
-            throw new RuntimeException(e);
-        }
-    }
+        BufferedReader in = null;
+        BufferedWriter out = null;
 
-    public static void query(Socket s1) throws IOException {
         try {
-            BufferedReader input = new BufferedReader(new InputStreamReader(s1.getInputStream()));
-            String query = input.readLine();
-            System.out.println("Received query: " + query);
+            in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
+            out = new BufferedWriter(new OutputStreamWriter(socket.getOutputStream()));
 
-            Dictionary dictionary = Dictionary.getDictionary();
-            List<String> meaningForWord = dictionary.getMeaningsForWord(query);
-            String csv = String.join(",", meaningForWord);
+            ObjectMapper mapper = new ObjectMapper();
+            String jsonRequest;
 
-            PrintWriter out = new PrintWriter(s1.getOutputStream(), true);
-            out.println(csv);
-            out.flush();
-            System.out.println("CSV sent to client: " + csv);
+            while ((jsonRequest = in.readLine()) != null) {
+                Message message = mapper.readValue(jsonRequest, Message.class);
+                RequestType requestType = message.getType();
+                System.out.println("Received: " + message);
 
-            out.close();
-            input.close();
-            s1.close();
+                switch (requestType) {
+                    case query:
+                        Output(query(message), out);
+                        break;
+                    case add:
+                        Output(add(message), out);
+                        break;
+                    case remove:
+                        Output(remove(message), out);
+                        break;
+                    case addmeanings:
+                        Output(addmeanings(message), out);
+                        break;
+                    case update:
+                        Output(update(message), out);
+                        break;
+                }
+            }
+
+        } catch (java.net.SocketException se) {
+            System.out.println("Client disconnected unexpectedly: " + se.getMessage());
         } catch (IOException e) {
-            System.err.println("Error in query task: " + e.getMessage());
+            System.err.println("IO error in RequestHandler: " + e.getMessage());
             e.printStackTrace();
+        } finally {
+            try {
+                String disconnectionMsg = "Client #" + clientId + " disconnected: " + socket.getRemoteSocketAddress();
+                System.out.println(disconnectionMsg);
+                if (controller != null) {
+                    controller.handleClientDisconnection(disconnectionMsg);
+                }
+                if (in != null) in.close();
+                if (out != null) out.close();
+                if (socket != null && !socket.isClosed()) socket.close();
+                System.out.println("Connection closed with client: " + socket.getRemoteSocketAddress());
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
         }
     }
 
-    public static void add(Socket s1) {
-        try {
-            BufferedReader input = new BufferedReader(new InputStreamReader(s1.getInputStream()));
-            Dictionary dictionary = Dictionary.getDictionary();
-            DictionaryFile df = DictionaryFile.getInstance();
-            String word = input.readLine();
-            System.out.println("Received add: " + word);
-            List<String> meanings = new ArrayList<>();
-            while(input.ready()) {
-                String line = input.readLine();
-                meanings.add(line);
-            }
+    private Response query(Message message) throws IOException {
+        String query = message.getWord();
+        System.out.println("Received query: " + query);
 
-            System.out.println("Received add: " + word + " " + meanings);
+        controller.addWorkerMessage("Client #" + clientId + " queried word: \"" + query + "\"");
 
-            dictionary.addWordAndMeanings(word, meanings);
-            String csv1;
-            if(!meanings.isEmpty()){
-                csv1 = String.join(",", word, String.join(",", meanings));
-                df.SaveFile(dictionary.getMap());
-            } else {
-                csv1 = "Please enter meanings";
-            }
-
-            PrintWriter out = new PrintWriter(s1.getOutputStream(), true);
-            out.println(csv1);
-            out.flush();
-            System.out.println("CSV1 sent to client: " + csv1);
-
-            out.close();
-            input.close();
-            s1.close();
-        } catch (IOException e) {
-            System.err.println("Error in add task: " + e.getMessage());
-            e.printStackTrace();
-        }
+        Dictionary dictionary = Dictionary.getDictionary();
+        List<String> meaningForWord = dictionary.getMeaningsForWord(query);
+        String csv = String.join(",", meaningForWord);
+        return new Response(true, csv);
     }
 
-    public static void remove(Socket s1) {
-        try {
-            BufferedReader input = new BufferedReader(new InputStreamReader(s1.getInputStream()));
-            String removeword = input.readLine();
-            System.out.println(removeword);
+    private Response add(Message message) throws IOException {
+        Dictionary dictionary = Dictionary.getDictionary();
+        DictionaryFile df = DictionaryFile.getInstance();
+        String word = message.getWord();
+        List<String> meanings = message.getMeanings();
 
-            Dictionary dictionary = Dictionary.getDictionary();
-            DictionaryFile df = DictionaryFile.getInstance();
-            dictionary.removeWordAndMeanings(removeword);
+        controller.addWorkerMessage("Client #" + clientId + " added word: \"" + word + "\" with meanings: " + meanings);
+        System.out.println("Received add: " + word + " " + meanings);
+
+        if (word == null || word.isEmpty() || meanings == null || meanings.isEmpty()) {
+            return new Response(false, "Please provide a word and its meanings.");
+        }
+
+        Response addResult = dictionary.addWordAndMeanings(word, meanings);
+        if (addResult.isSuccess()) {
             df.SaveFile(dictionary.getMap());
-            String csv = removeword;
-
-            PrintWriter out = new PrintWriter(s1.getOutputStream(), true);
-            out.println(csv);
-            out.flush();
-            System.out.println("CSV2 sent to client: " + csv);
-
-            out.close();
-            input.close();
-            s1.close();
-        } catch (IOException e) {
-            System.err.println("Error in remove task: " + e.getMessage());
-            e.printStackTrace();
         }
+
+        return addResult;
     }
 
-    public static void addmeanings(Socket s1) {
-        try {
-            BufferedReader input = new BufferedReader(new InputStreamReader(s1.getInputStream()));
-            Dictionary dictionary = Dictionary.getDictionary();
-            DictionaryFile df = DictionaryFile.getInstance();
-            String word = input.readLine();
-            List<String> meanings = new ArrayList<>();
-            while(input.ready()) {
-                String line = input.readLine();
-                meanings.add(line);
-            }
+    private Response remove(Message message) {
+        String removeword = message.getWord();
+        System.out.println("Received remove: " + removeword);
+        controller.addWorkerMessage("Client #" + clientId + " removed word: \"" + removeword + "\"");
+        Dictionary dictionary = Dictionary.getDictionary();
+        DictionaryFile df = DictionaryFile.getInstance();
 
-            dictionary.addAdditionalMeanings(word, meanings);
-            String csv1;
-            if(!meanings.isEmpty()){
-                csv1 = String.join(",", word, String.join(",", meanings));
-                df.SaveFile(dictionary.getMap());
-            } else {
-                csv1 = "Please enter meanings";
-            }
-
-            PrintWriter out = new PrintWriter(s1.getOutputStream(), true);
-            out.println(csv1);
-            out.flush();
-            System.out.println("CSV3 sent to client: " + csv1);
-
-            out.close();
-            input.close();
-            s1.close();
-        } catch (IOException e) {
-            System.err.println("Error in addmeanings task: " + e.getMessage());
-            e.printStackTrace();
-        }
-    }
-
-    public static void update(Socket s1) {
-        try {
-            BufferedReader input = new BufferedReader(new InputStreamReader(s1.getInputStream()));
-            Dictionary dictionary = Dictionary.getDictionary();
-            DictionaryFile df = DictionaryFile.getInstance();
-
-            String word = input.readLine();
-            String existMeaning = input.readLine();
-            String newMeaning = input.readLine();
-
-            dictionary.updateMeaning(word, existMeaning, newMeaning);
+        Response result = dictionary.removeWordAndMeanings(removeword);
+        if (result.isSuccess()) {
             df.SaveFile(dictionary.getMap());
-            String csv1 = String.join(",", word, existMeaning, newMeaning);
-
-            PrintWriter out = new PrintWriter(s1.getOutputStream(), true);
-            out.println(csv1);
-            out.flush();
-            System.out.println("CSV4 sent to client: " + csv1);
-
-            out.close();
-            input.close();
-            s1.close();
-        } catch (IOException e) {
-            System.err.println("Error in update task: " + e.getMessage());
-            e.printStackTrace();
         }
+
+        return result;
+    }
+
+    private Response addmeanings(Message message) throws IOException {
+        Dictionary dictionary = Dictionary.getDictionary();
+        DictionaryFile df = DictionaryFile.getInstance();
+        String word = message.getWord();
+        List<String> meanings = message.getMeanings();
+        controller.addWorkerMessage("Client #" + clientId + " added meanings to word: \"" + word + "\", meanings: " + meanings);
+
+        if (meanings == null || meanings.isEmpty()) {
+            return new Response(false, "Please enter meanings");
+        }
+
+        Response result = dictionary.addAdditionalMeanings(word, meanings);
+        if (result.isSuccess()) {
+            df.SaveFile(dictionary.getMap());
+        }
+
+        return result;
+    }
+
+    private Response update(Message message) throws IOException {
+        Dictionary dictionary = Dictionary.getDictionary();
+        DictionaryFile df = DictionaryFile.getInstance();
+
+        String word = message.getWord();
+        String existMeaning = message.getExistMeaning();
+        String newMeaning = message.getNewMeaning();
+        controller.addWorkerMessage("Client #" + clientId + " updated word: \"" + word + "\", from: \"" + existMeaning + "\" to: \"" + newMeaning + "\"");
+
+        if (word == null || word.isEmpty() || existMeaning == null || existMeaning.isEmpty() || newMeaning == null || newMeaning.isEmpty()) {
+            return new Response(false, "Please provide a word and both existing and new meanings.");
+        }
+
+        Response result = dictionary.updateMeaning(word, existMeaning, newMeaning);
+        if (result.isSuccess()) {
+            df.SaveFile(dictionary.getMap());
+        }
+
+        return result;
+    }
+
+    private void Output(Response response, BufferedWriter out) throws IOException {
+        ObjectMapper mapper = new ObjectMapper();
+        String json = mapper.writeValueAsString(response);
+        out.write(json);
+        out.newLine();
+        out.flush();
+        System.out.println("Response sent to client: " + json);
     }
 }
